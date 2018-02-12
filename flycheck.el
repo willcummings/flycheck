@@ -5841,11 +5841,13 @@ https://github.com/rust-lang/rust/blob/master/src/libsyntax/json.rs#L67-L139"
         (when .is_primary
           (setq primary-filename .file_name
                 primary-line .line_start
-                primary-column .column_start))
+                primary-column .column_start
+                primary-line-end .line_end
+                primary-col-end .column_end))
         (push
          (flycheck-error-new-at
           .line_start
-          .column_start
+          (- .column_start 1)
           ;; Non-primary spans are used for notes
           (if .is_primary error-level 'info)
           (if .is_primary
@@ -5856,6 +5858,8 @@ https://github.com/rust-lang/rust/blob/master/src/libsyntax/json.rs#L67-L139"
             ;; otherwise we won't be able to display anything
             (or .label error-message))
           :id error-code
+          :end-line .line_end
+          :end-column (- .column_end 1)
           :checker checker
           :buffer buffer
           :filename .file_name
@@ -5873,8 +5877,8 @@ https://github.com/rust-lang/rust/blob/master/src/libsyntax/json.rs#L67-L139"
           ;; the diagnostic.
           (or (cdr (assq 'line_start (car .spans)))
               primary-line)
-          (or (cdr (assq 'column_start (car .spans)))
-              primary-column)
+          (- (or (cdr (assq 'column_start (car .spans)))
+              primary-column) 1)
           'info
           ;; Messages from `cargo clippy' may suggest replacement code.  In
           ;; these cases, the `message' field itself is an unhelpful `try' or
@@ -5885,6 +5889,10 @@ https://github.com/rust-lang/rust/blob/master/src/libsyntax/json.rs#L67-L139"
               (format "%s: `%s`" .message replacement)
             .message)
           :id error-code
+          :end-line (or (cdr (assq 'line_end (car .spans)))
+                        primary-line-end)
+          :end-column (- (or (cdr (assq 'column_end (car .spans)))
+                          primary-col-end) 1)
           :checker checker
           :buffer buffer
           :filename primary-filename

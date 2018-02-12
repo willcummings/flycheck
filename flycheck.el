@@ -2884,7 +2884,13 @@ variables of Flycheck."
                                                          &optional level message
                                                          &key checker id group end-line end-column
                                                          (filename (buffer-file-name))
-                                                         (buffer (current-buffer)))))
+                                                         (buffer (current-buffer))))
+               (:constructor flycheck-error-new-for-region (region-start region-end
+                                                                &optional level message
+                                                                &key checker id group start-line start-column end-line end-column
+                                                                (filename (buffer-file-name))
+                                                                (buffer (current-buffer))
+                                                                &aux (region (cons region-start region-end)))))
   "Structure representing an error reported by a syntax checker.
 Slots:
 
@@ -2922,6 +2928,11 @@ Slots:
 
      This is used to highlight the error more precisely.
 
+`region' (optional)
+     The region the error refers to as a cons of byte offsets
+     from the start of the file. If this is given then the line
+     and column information can be computed from it.
+
 `message' (optional)
      The error message as a string, if any.
 
@@ -2940,13 +2951,31 @@ Slots:
      in order to be able to present them to the user.
 
      See `flycheck-related-errors`."
-  buffer checker filename start-line start-column end-line end-column message level id group)
+  buffer checker filename start-line start-column end-line end-column region message level id group)
 
-(defun flycheck-error-line (err) (flycheck-error-start-line err))
+(defun flycheck-error-calc-line-col-from-region (err)
+  (if (and (flycheck-error-region err)
+           (not (flycheck-error-start-line err)))
+      (flycheck-error-with-buffer err
+        (save-restriction
+          (save-excursion
+            (widen)
+            (goto-char (car (flycheck-error-region err)))
+            (setf (flycheck-error-start-line err) (line-number-at-pos))
+            (setf (flycheck-error-start-column err) (current-column))
+            (goto-char (cdr (flycheck-error-region err)))
+            (setf (flycheck-error-end-line err) (line-number-at-pos))
+            (setf (flycheck-error-end-column err) (current-column)))))))
+
+(defun flycheck-error-line (err)
+  (flycheck-error-calc-line-col-from-region err)
+  (flycheck-error-start-line err))
 
 (gv-define-simple-setter flycheck-error-line (lambda (err x) (setf (flycheck-error-start-line err) x)))
 
-(defun flycheck-error-column (err) (flycheck-error-start-column err))
+(defun flycheck-error-column (err)
+  (flycheck-error-calc-line-col-from-region err)
+  (flycheck-error-start-column err))
 
 (gv-define-simple-setter flycheck-error-column (lambda (err x) (setf (flycheck-error-start-column err) x)))
 

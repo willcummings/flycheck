@@ -2880,7 +2880,7 @@ variables of Flycheck."
 ;;; Errors from syntax checks
 (cl-defstruct (flycheck-error
                (:constructor flycheck-error-new)
-               (:constructor flycheck-error-new-at (line column
+               (:constructor flycheck-error-new-at (start-line start-column
                                                          &optional level message
                                                          &key checker id group end-line end-column
                                                          (filename (buffer-file-name))
@@ -2940,7 +2940,17 @@ Slots:
      in order to be able to present them to the user.
 
      See `flycheck-related-errors`."
-  buffer checker filename line column end-line end-column message level id group)
+  buffer checker filename start-line start-column end-line end-column message level id group)
+
+(defun flycheck-error-line (err) (flycheck-error-start-line err))
+
+(gv-define-simple-setter flycheck-error-line (lambda (err x) (setf (flycheck-error-start-line err) x)))
+
+(defun flycheck-error-column (err) (flycheck-error-start-column err))
+
+(gv-define-simple-setter flycheck-error-column (lambda (err x) (setf (flycheck-error-start-column err) x)))
+
+(defun flycheck-error-column (err) (flycheck-error-start-column err))
 
 (defmacro flycheck-error-with-buffer (err &rest forms)
   "Switch to the buffer of ERR and evaluate FORMS.

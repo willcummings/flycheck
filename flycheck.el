@@ -2887,7 +2887,7 @@ variables of Flycheck."
                                                          (buffer (current-buffer))))
                (:constructor flycheck-error-new-for-region (region-start region-end
                                                                 &optional level message
-                                                                &key checker id group start-line start-column end-line end-column
+                                                                &key checker id group
                                                                 (filename (buffer-file-name))
                                                                 (buffer (current-buffer))
                                                                 &aux (region (cons region-start region-end)))))

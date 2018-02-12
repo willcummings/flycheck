@@ -1304,6 +1304,10 @@ See `rx' for a complete list of all built-in `rx' forms."
          (append
           `((line . ,(rx (group-n 2 (one-or-more digit))))
             (column . ,(rx (group-n 3 (one-or-more digit))))
+            (end-line . ,(rx (group-n 6 (one-or-more digit))))
+            (end-column . ,(rx (group-n 7 (one-or-more digit))))
+            (region-start . ,(rx (group-n 8 (one-or-more digit))))
+            (region-end . ,(rx (group-n 9 (one-or-more digit))))
             (file-name flycheck-rx-file-name 0 nil)
             (message flycheck-rx-message 0 nil)
             (id flycheck-rx-id 0 nil))
@@ -2882,7 +2886,7 @@ variables of Flycheck."
                (:constructor flycheck-error-new)
                (:constructor flycheck-error-new-at (start-line start-column
                                                          &optional level message
-                                                         &key checker id group end-line end-column
+                                                         &key checker id group end-line end-column region
                                                          (filename (buffer-file-name))
                                                          (buffer (current-buffer))))
                (:constructor flycheck-error-new-for-region (region-start region-end
@@ -6057,7 +6061,11 @@ otherwise."
             (line (match-string 2 err))
             (column (match-string 3 err))
             (message (match-string 4 err))
-            (id (match-string 5 err)))
+            (id (match-string 5 err))
+            (end-line (match-string 6 err))
+            (end-column (match-string 7 err))
+            (region-start (match-string 8 err))
+            (region-end (match-string 9 err)))
         (flycheck-error-new-at
          (flycheck-string-to-number-safe line)
          (flycheck-string-to-number-safe column)
@@ -6067,7 +6075,12 @@ otherwise."
          :checker checker
          :filename (if (or (null filename) (string-empty-p filename))
                        (buffer-file-name)
-                     filename))))))
+                     filename)
+         :end-line (flycheck-string-to-number-safe end-line)
+         :end-column (flycheck-string-to-number-safe end-column)
+         :region (when (or region-start region-end)
+                   (cons (flycheck-string-to-number-safe region-start)
+                         (flycheck-string-to-number-safe region-end))))))))
 
 (defun flycheck-parse-error-with-patterns (err patterns checker)
   "Parse a gle ERR with error PATTERNS for CHECKER.

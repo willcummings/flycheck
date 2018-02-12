@@ -3124,17 +3124,20 @@ If ERR contains precise information about the region such as start
 and end columns, MODE is ignored."
   ;; Ignoring fields speeds up calls to `line-end-position' in
   ;; `flycheck-error-column-region' and `flycheck-error-line-region'.
-  (let ((inhibit-field-text-motion t))
-    (or (flycheck-error-exact-region err)
-        (pcase mode
-          (`columns (or (flycheck-error-column-region err)
-                        (flycheck-error-line-region err)))
-          (`symbols (or (flycheck-error-thing-region 'symbol err)
-                        (flycheck-error-region-for-mode err 'columns)))
-          (`sexps (or (flycheck-error-thing-region 'sexp err)
-                      (flycheck-error-region-for-mode err 'columns)))
-          (`lines (flycheck-error-line-region err))
-          (_ (error "Invalid mode %S" mode))))))
+  (or (flycheck-error-region err)
+      (let ((inhibit-field-text-motion t)
+            (region
+             (or (flycheck-error-exact-region err)
+                 (pcase mode
+                   (`columns (or (flycheck-error-column-region err)
+                                 (flycheck-error-line-region err)))
+                   (`symbols (or (flycheck-error-thing-region 'symbol err)
+                                 (flycheck-error-region-for-mode err 'columns)))
+                   (`sexps (or (flycheck-error-thing-region 'sexp err)
+                               (flycheck-error-region-for-mode err 'columns)))
+                   (`lines (flycheck-error-line-region err))
+                   (_ (error "Invalid mode %S" mode))))))
+        (setf (flycheck-error-region err) region))))
 
 (defun flycheck-error-pos (err)
   "Get the buffer position of ERR.

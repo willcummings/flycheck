@@ -2878,19 +2878,10 @@ variables of Flycheck."
 
 
 ;;; Errors from syntax checks
-(cl-defstruct (flycheck-coords
-               (:constructor flycheck-coords-new (start-line end-line start-col end-col)))
+(cl-defstruct (flycheck-error-coords
+               (:constructor flycheck-error-coords-new (start-line end-line start-col end-col)))
   "Structure representing the location of an error as lines and columns."
   start-line end-line start-col end-col)
-
-(cl-defstruct (flycheck-region
-               (:constructor flycheck-region-new (start-pos end-pos)))
-  "Structure representing the location of an error as byte-offsets from the start of a file."
-  start-pos end-pos)
-
-(cl-defun flycheck-region-from-cons ((start-pos . end-pos))
-  "Create a region from a cons cell of `(START-POS . END-POS)`."
-  (flycheck-region-new start-pos end-pos))
 
 (cl-defstruct (flycheck-error
                (:constructor flycheck-error-new)
@@ -2910,7 +2901,7 @@ variables of Flycheck."
                                         (filename (buffer-file-name))
                                         (buffer (current-buffer))
                                         &aux
-                                        (region (flycheck-region-new start-pos end-pos)))))
+                                        (region (cons start-pos end-pos)))))
   "Structure representing an error reported by a syntax checker.
 Slots:
 
@@ -2971,23 +2962,35 @@ Slots:
   "Return the line of an errror ERR.
 
 Defined for compatibility."
-  (flycheck-coords-start-line (flycheck-error-coords err)))
+  (flycheck-error-coords-start-line (flycheck-error-coords err)))
 
-(gv-define-simple-setter flycheck-error-line
-                         (lambda (err x)
-                           (setf (flycheck-coords-start-line (flycheck-error-coords err)) x)
-                           (setf (flycheck-coords-end-line   (flycheck-error-coords err)) x)))
+(gv-define-simple-setter
+ flycheck-error-line
+ (lambda (err x)
+   (let ((coords (flycheck-error-coords err))
+         (buf (flycheck-error-buffer err)))
+     (setf (flycheck-error-coords-start-line coords) x)
+     (setf (flycheck-error-coords-end-line   coords) x)
+     (setf (flycheck-error-region err)
+           (flycheck-coords-to-region coords buf))
+     x)))
 
 (defun flycheck-error-column (err)
   "Return the column of an errror ERR.
 
 Defined for compatibility."
-  (flycheck-coords-start-col (flycheck-error-coords err)))
+  (flycheck-error-coords-start-col (flycheck-error-coords err)))
 
-(gv-define-simple-setter flycheck-error-column
-                         (lambda (err x)
-                           (setf (flycheck-coords-start-col (flycheck-error-coords err)) x)
-                           (setf (flycheck-coords-end-col   (flycheck-error-coords err)) x)))
+(gv-define-simple-setter
+ flycheck-error-column
+ (lambda (err x)
+   (let ((coords (flycheck-error-coords err))
+         (buf (flycheck-error-buffer err)))
+     (setf (flycheck-error-coords-start-col coords) x)
+     (setf (flycheck-error-coords-end-col   coords) x)
+     (setf (flycheck-error-region err)
+           (flycheck-coords-to-region coords buf))
+     x)))
 
 ; Convert between region and coordinate representations
 (defun flycheck-region-to-coords (region buf)
@@ -2997,19 +3000,19 @@ Defined for compatibility."
     (save-excursion
       (save-restriction
         (widen)
-        (goto-char (flycheck-region-start-pos region))
+        (goto-char (car region))
         (let ((start-line (line-number-at-pos))
               (start-col  (current-column)))
-          (goto-char (flycheck-region-end-pos region))
+          (goto-char (cdr region))
           (let ((end-line (line-number-at-pos))
                 (end-col  (current-column)))
-            (flycheck-coords-new start-line end-line start-col end-col)))))))
+            (flycheck-error-coords-new start-line end-line start-col end-col)))))))
 
 (defun flycheck-sparse-coords-to-region (start-line start-col end-line end-col buf)
   "Convert coordinates to a full set of coordinates and a set of buffer-offsets.
 
 Returns a cons-cell of `(FULL-COORDS . REGION)` where FULL-COORDS
-is a set of coordinates where non are nil, and REGION is a
+is a set of coordinates where none are nil, and REGION is a
 region.
 
 START-LINE is the line on which the error begins and may not be
@@ -3030,25 +3033,24 @@ BUF is the buffer used and may not be nil."
   (if (and start-col end-col)
       ;; We have an exact region and can convert using flycheck-coords-to-region
       (let* ((end-line (or end-line start-line))
-             (coords (flycheck-coords-new start-line end-line start-col end-col))
-             (region (flycheck-region-from-cons (flycheck-coords-to-region coords buf))))
+             (coords (flycheck-error-coords-new start-line end-line start-col end-col))
+             (region (flycheck-coords-to-region coords buf)))
         (cons coords region))
     ;; We have an inexact region, so we will find a region and use that to fill in missing coordinates
     (let ((region
-           (flycheck-region-from-cons
-            ;; If we are missing start-col, fall back to flycheck-line-region
-            ;; otherwise, use flycheck-highlighting-mode
-            (if start-col
-              (let ((inhibit-field-text-motion t))
-                (pcase flycheck-highlighting-mode
-                  (`columns (flycheck-column-region start-line start-col buf))
-                  (`symbols (or (flycheck-thing-region 'symbol start-line start-col buf)
-                                (flycheck-column-region start-line start-col buf)))
-                  (`sexps   (or (flycheck-thing-region 'sexp start-line start-col buf)
-                                (flycheck-column-region start-line start-col buf)))
-                  (`lines (flycheck-line-region start-line buf))
-                  (_ (error "Invalid mode %S" flycheck-highlighting-mode))))
-              (flycheck-line-region start-line buf)))))
+           ;; If we are missing start-col, fall back to flycheck-line-region
+           ;; otherwise, use flycheck-highlighting-mode
+           (if start-col
+               (let ((inhibit-field-text-motion t))
+                 (pcase flycheck-highlighting-mode
+                   (`columns (flycheck-column-region start-line start-col buf))
+                   (`symbols (or (flycheck-thing-region 'symbol start-line start-col buf)
+                                 (flycheck-column-region start-line start-col buf)))
+                   (`sexps   (or (flycheck-thing-region 'sexp start-line start-col buf)
+                                 (flycheck-column-region start-line start-col buf)))
+                   (`lines (flycheck-line-region start-line buf))
+                   (_ (error "Invalid mode %S" flycheck-highlighting-mode))))
+             (flycheck-line-region start-line buf))))
       (cons (flycheck-region-to-coords region buf) region))))
 
 (defmacro flycheck-with-buffer (buf &rest forms)
@@ -3076,11 +3078,11 @@ entry in COORDS must be non-nil."
       (save-restriction
         (widen)
         (goto-char (point-min))
-        (forward-line (- (flycheck-coords-start-line coords) 1))
-        (let ((start (+ (point) (flycheck-coords-start-col coords))))
+        (forward-line (- (flycheck-error-coords-start-line coords) 1))
+        (let ((start (+ (point) (flycheck-error-coords-start-col coords))))
           (goto-char (point-min))
-          (forward-line (- (flycheck-coords-end-line coords) 1))
-          (cons start (+ (point) (flycheck-coords-end-col coords))))))))
+          (forward-line (- (flycheck-error-coords-end-line coords) 1))
+          (cons start (+ (point) (flycheck-error-coords-end-col coords))))))))
 
 (defun flycheck-line-region (line buf)
   "Get the line region of line LINE in BUF.
@@ -3783,12 +3785,10 @@ Return the created overlay."
   ;; We must have a proper error region for the sake of fringe indication,
   ;; error display and error navigation, even if the highlighting is disabled.
   ;; We erase the highlighting later on in this case
-  (let* ((region (flycheck-error-region err))
-         (beg (flycheck-region-start-pos region))
-         (end (flycheck-region-end-pos region))
-         (overlay (make-overlay beg end))
-         (level (flycheck-error-level err))
-         (category (flycheck-error-level-overlay-category level)))
+  (pcase-let* ((`(,beg . ,end) (flycheck-error-region err))
+               (overlay (make-overlay beg end))
+               (level (flycheck-error-level err))
+               (category (flycheck-error-level-overlay-category level)))
     (unless (flycheck-error-level-p level)
       (error "Undefined error level: %S" level))
     (setf (overlay-get overlay 'flycheck-overlay) t)
@@ -4309,7 +4309,7 @@ POS defaults to `point'."
           ;; otherwise replace the current buffer.
           (pop-to-buffer buffer 'other-window)
         (switch-to-buffer buffer))
-      (let ((pos (flycheck-region-start-pos (flycheck-error-region error))))
+      (let ((pos (car (flycheck-error-region error))))
         (unless (eq (goto-char pos) (point))
           ;; If widening gets in the way of moving to the right place, remove it
           ;; and try again

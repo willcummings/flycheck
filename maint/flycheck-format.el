@@ -1,6 +1,6 @@
 ;;; flycheck-format.el --- Flycheck: Source code formatter  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2016  Sebastian Wiesner and Flycheck contributors
+;; Copyright (C) 2016, 2018  Sebastian Wiesner and Flycheck contributors
 
 ;; Author: Sebastian Wiesner <swiesner@lunaryorn.com>
 ;; This file is not part of GNU Emacs.
@@ -64,10 +64,37 @@ Switch the buffer to Emacs Lisp mode."
            space-before-tab::space      ; Replace tabs with spaces
            trailing                     ; Remove trailing spaces
            )))
-    (cl-letf (((symbol-function 'message) #'ignore))
+    (let ((inhibit-message t))
       ;; Silence "Indenting region..." progress reporter
       (indent-region (point-min) (point-max)))
     (whitespace-cleanup-region (point-min) (point-max))))
+
+(defun flycheck/check-long-lines (filename &optional length)
+  "Check buffer for long lines.
+
+FILENAME is the name of the file being checked.
+
+Display a message for any line longer than LENGTH.  If LENGTH is
+not specified, defaults to `fill-column'.  If the buffer has no
+long lines return t, otherwise return nil.
+
+The first line of the buffer is allowed"
+  (let ((long-lines 0)
+        (max-length (or length fill-column)))
+    (save-excursion
+      (goto-char (point-min))
+      ;; The first line is allowed to be any length
+      (forward-line 1)
+      (while (not (eobp))
+        (end-of-line)
+        (when (> (current-column) max-length)
+          (message "%s:%d: line is over %d characters"
+                   filename
+                   (line-number-at-pos (point))
+                   max-length)
+          (setq long-lines (1+ long-lines)))
+        (forward-line 1)))
+    (= long-lines 0)))
 
 (defun flycheck/file-formatted-p (filename)
   "Check whether FILENAME is properly formatted.
@@ -77,7 +104,8 @@ Return a non-nil value in this case, otherwise return nil."
     (insert-file-contents filename)
     (set-buffer-modified-p nil)
     (flycheck/eval-and-format-buffer filename)
-    (not (buffer-modified-p))))
+    (and (not (buffer-modified-p))
+         (flycheck/check-long-lines filename 80))))
 
 (defun flycheck/batch-check-format ()
   "Check formatting of all sources."

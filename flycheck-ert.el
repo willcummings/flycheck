@@ -99,7 +99,7 @@ Defaults to `error'."
 Like `with-temp-buffer', but resets the modification state of the
 temporary buffer to make sure that it is properly killed even if
 it has a backing file and is modified."
-  (declare (indent 0))
+  (declare (indent 0) (debug t))
   `(with-temp-buffer
      (unwind-protect
          ,(macroexp-progn body)
@@ -114,7 +114,7 @@ it has a backing file and is modified."
 
 BODY is evaluated with `current-buffer' being a buffer with the
 contents FILE-NAME."
-  (declare (indent 1))
+  (declare (indent 1) (debug t))
   `(let ((file-name ,file-name))
      (unless (file-exists-p file-name)
        (error "%s does not exist" file-name))
@@ -337,9 +337,10 @@ Raise an assertion error if the buffer is not clear afterwards."
 
 ERROR is a Flycheck error object."
   (let* ((overlay (-first (lambda (ov) (equal (overlay-get ov 'flycheck-error)
-                                              error))
+                                         error))
                           (flycheck-overlays-in 0 (+ 1 (buffer-size)))))
-         (region (flycheck-error-region-for-mode error 'symbols))
+         (flycheck-highlighting-mode 'symbols)
+         (region (flycheck-error-region error))
          (level (flycheck-error-level error))
          (category (flycheck-error-level-overlay-category level))
          (face (get category 'face))
@@ -436,8 +437,7 @@ resource directory."
 Return non-nil if the point is at the N'th Flycheck error in the
 current buffer.  Otherwise return nil."
   (let* ((error (nth (1- n) flycheck-current-errors))
-         (mode flycheck-highlighting-mode)
-         (region (flycheck-error-region-for-mode error mode)))
+         (region (flycheck-error-region error)))
     (and (member error (flycheck-overlay-errors-at (point)))
          (= (point) (car region)))))
 

@@ -222,6 +222,7 @@ attention to case differences."
     pug
     puppet-parser
     puppet-lint
+    python-mypy
     python-flake8
     python-pylint
     python-pycompile
@@ -8731,6 +8732,44 @@ See URL `http://puppet-lint.com/'."
   ;; Since we check the original file, we can only use this syntax checker if
   ;; the buffer is actually linked to a file, and if it is not modified.
   :predicate flycheck-buffer-saved-p)
+
+(flycheck-def-option-var flycheck-python-mypy-use-python-2 nil (python-mypy)
+  "Whether to pass --py2 to mypy."
+  :type 'boolean
+  :safe #'booleanp
+  :package-version '("flycheck" . "30"))
+
+(flycheck-def-option-var flycheck-python-mypy-silent-imports nil (python-mypy)
+  "Whether to disable type-checking of imported modules."
+  :type 'boolean
+  :safe #'booleanp
+  :package-version '("flycheck" . "30"))
+
+(flycheck-def-option-var flycheck-python-mypy-ignore-missing-imports nil (python-mypy)
+  "Whether to ignore missing imports."
+  :type 'boolean
+  :safe #'booleanp
+  :package-version '("flycheck" . "30"))
+
+(flycheck-define-checker python-mypy
+  "A Python type checker using mypy.
+
+See URL `http://www.mypy-lang.org/'."
+  :command ("mypy"
+            "--shadow-file" source-original source
+            (option-flag "--py2" flycheck-python-mypy-use-python-2)
+            (option-flag "--silent-imports" flycheck-python-mypy-silent-imports)
+            (option-flag "--ignore-missing-imports" flycheck-python-mypy-ignore-missing-imports)
+            "--fast-parser"
+            "--check-untyped-defs"
+            "--warn-redundant-casts"
+            "--warn-unused-ignores"
+            source-original)
+  :error-patterns
+  ((error line-start (file-name) ":" line ":" (optional column ":")
+          " error:" (message) line-end))
+  :next-checkers (python-pylint)
+  :modes python-mode)
 
 (defun flycheck-python-find-module (checker module)
   "Check if a Python MODULE is available.
